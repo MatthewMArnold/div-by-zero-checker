@@ -71,8 +71,100 @@ public class DivByZeroTransfer extends CFTransfer {
             Comparison operator,
             AnnotationMirror lhs,
             AnnotationMirror rhs) {
-        // TODO
-        return lhs;
+        AnnotationMirror ltZero = reflect(LtZero.class);
+        AnnotationMirror leZero = reflect(LeZero.class);
+        AnnotationMirror gtZero = reflect(GtZero.class);
+        AnnotationMirror geZero = reflect(GeZero.class);
+        AnnotationMirror neZero = reflect(NeZero.class);
+        AnnotationMirror eqZero = reflect(EqZero.class);
+
+        switch(operator) {
+            case EQ:
+                return glb(lhs, rhs);
+            case NE: {
+                if (equal(rhs, eqZero)) {
+                    if (equal(lhs, top())) {
+                        return neZero;
+                    } else if (equal(lhs, leZero)) {
+                        return ltZero;
+                    } else if (equal(lhs, eqZero)) {
+                        return bottom();
+                    } else if (equal(lhs, geZero)) {
+                        return gtZero;
+                    }
+                }
+                
+                return lhs;
+            }
+            case LT: {
+                if (equal(rhs, ltZero) || equal(rhs, leZero) || equal(rhs, eqZero)) {
+                    if (equal(lhs, top()) || equal(lhs, ltZero) ||
+                        equal(lhs, leZero) || equal(lhs, neZero)) {
+                        return ltZero;
+                    } else {
+                        return bottom();
+                    }
+                }
+
+                return lhs;
+            }
+            case LE: {
+                if (equal(rhs, ltZero)) {
+                    if (equal(lhs, top()) || equal(lhs, ltZero) ||
+                        equal(lhs, leZero) || equal(lhs, neZero)) {
+                        return ltZero;
+                    } else {
+                        return bottom();
+                    }
+                } else if (equal(rhs, leZero) || equal(rhs, eqZero)) {
+                    if (equal(lhs, top()) || equal(lhs, leZero)) {
+                        return leZero;
+                    } else if (equal(lhs, ltZero) || equal(lhs, neZero)) {
+                        return ltZero;
+                    } else if (equal(lhs, eqZero) || equal(lhs, geZero)) {
+                        return eqZero;
+                    } else {
+                        return bottom();
+                    }
+                }
+
+                return lhs;
+            }
+            case GT: {
+                AnnotationMirror am = refineLhsOfComparison(
+                    Comparison.LT, flipAlongVerticalCenter(lhs), flipAlongVerticalCenter(rhs));
+
+                return flipAlongVerticalCenter(am);
+            }
+            case GE: {
+                AnnotationMirror am = refineLhsOfComparison(
+                    Comparison.LE, flipAlongVerticalCenter(lhs), flipAlongVerticalCenter(rhs));
+
+                return flipAlongVerticalCenter(am);
+            }
+        }
+
+        throw new IllegalStateException();
+    }
+
+    /**
+     * Flips the annotation around a line drawn through the center of the lattice,
+     * where < and <= are on one side of the lattice, > and >= are on another,
+     * and 0 and !0 are in the center of the lattice.
+     */
+    private AnnotationMirror flipAlongVerticalCenter(AnnotationMirror x) {
+        if (equal(x, reflect(LeZero.class))) {
+            return reflect(GeZero.class);
+        } else if (equal(x, reflect(LtZero.class))) {
+            return reflect(GtZero.class);
+        } else if (equal(x, reflect(GeZero.class))) {
+            return reflect(LeZero.class);
+        } else if (equal(x, reflect(GtZero.class))) {
+            return reflect(LtZero.class);
+        } else {
+            // No flipping required
+            return x;
+        }
     }
 
     /**
@@ -93,8 +185,132 @@ public class DivByZeroTransfer extends CFTransfer {
             BinaryOperator operator,
             AnnotationMirror lhs,
             AnnotationMirror rhs) {
-        // TODO
-        return top();
+        AnnotationMirror ltZero = reflect(LtZero.class);
+        AnnotationMirror leZero = reflect(LeZero.class);
+        AnnotationMirror gtZero = reflect(GtZero.class);
+        AnnotationMirror geZero = reflect(GeZero.class);
+        AnnotationMirror neZero = reflect(NeZero.class);
+        AnnotationMirror eqZero = reflect(EqZero.class);
+
+        switch(operator) {
+            case PLUS: {
+                if (equal(lhs, bottom()) || equal(rhs, bottom())) {
+                    return bottom();
+                } else if (equal(lhs, top()) || equal(rhs, top())) {
+                    return top();
+                } else if (equal(lhs, neZero) || equal(rhs, neZero)) {
+                    if (equal(lhs, eqZero) || equal(rhs, eqZero)) {
+                        return neZero;
+                    } else {
+                        return top();
+                    }
+                } else if (equal(lhs, rhs)) {
+                    return lhs;
+                } else if (equal(lhs, eqZero)) {
+                    return rhs;
+                } else if (equal(rhs, eqZero)) {
+                    return lhs;
+                } else if ((equal(lhs, ltZero) && equal(rhs, leZero)) ||
+                           (equal(rhs, ltZero) && equal(lhs, leZero))) {
+                    return ltZero;
+                } else if ((equal(lhs, gtZero) && equal(rhs, geZero)) ||
+                           (equal(rhs, gtZero) && equal(lhs, geZero))) {
+                    return gtZero;
+                } else {
+                    return top();
+                }
+            }
+            case MINUS: {
+                // Flip rhs and then call arithmeticTransfer
+                if (equal(rhs, ltZero)) {
+                    rhs = gtZero;
+                } else if (equal(rhs, leZero)) {
+                    rhs = geZero;
+                } else if (equal(rhs, gtZero)) {
+                    rhs = ltZero;
+                } else if (equal(rhs, geZero)) {
+                    rhs = leZero;
+                }
+
+                return arithmeticTransfer(BinaryOperator.PLUS, lhs, rhs);
+            }
+            case TIMES: {
+                if (equal(lhs, bottom()) || equal(rhs, bottom())) {
+                    return bottom();
+                } else if (equal(lhs, top()) || equal(rhs, top())) {
+                    return top();
+                } else if (equal(lhs, eqZero) || equal(rhs, eqZero)) {
+                    return eqZero;
+                } else if (equal(lhs, neZero) || equal(rhs, neZero)) {
+                    if (equal(lhs, leZero) || equal(lhs, geZero) ||
+                        equal(rhs, leZero) || equal(rhs, geZero)) {
+                        return top();
+                    } else {
+                        return neZero;
+                    }
+                } else if (equal(lhs, ltZero) || equal(rhs, ltZero)) {
+                    if (equal(lhs, ltZero) && equal(rhs, ltZero)) {
+                        return gtZero;
+                    } else if (equal(lhs, leZero) || equal(rhs, leZero)) {
+                        return geZero;
+                    } else if (equal(lhs, geZero) || equal(rhs, geZero)) {
+                        return leZero;
+                    } else {  // equal(lhs, gtZero) || equal(rhs, gtZero)
+                        return ltZero;
+                    }
+                } else if (equal(lhs, leZero) || equal(rhs, leZero)) {
+                    if (equal(lhs, leZero) && equal(rhs, leZero)) {
+                        return geZero;
+                    } else {
+                        return leZero;
+                    }
+                } else if (equal(lhs, geZero) || equal(rhs, geZero)) {
+                    return geZero;
+                } else {
+                    return gtZero;
+                }
+            }
+            case DIVIDE: {
+                if (equal(rhs, top()) || equal(rhs, leZero) ||
+                    equal(rhs, eqZero) || equal(rhs, geZero)) {
+                    // Handle cases where rhs possibly zero
+                    return bottom();
+                } else {
+                    // Change operator to MULTIPLY and call recursively
+                    // since transfer fn for DIVIDE and MULTIPLY are identical
+                    // aside from checking for divide by zero
+                    return arithmeticTransfer(BinaryOperator.TIMES, lhs, rhs);
+                }
+            }
+            case MOD: {
+                if (equal(rhs, top()) || equal(rhs, leZero) || equal(rhs, eqZero) || equal(rhs, geZero)) {
+                    // Cases where rhs possibly zero
+                    return bottom();
+                } else if (equal(lhs, bottom()) || equal(rhs, bottom())) {
+                    return bottom();
+                } else if (equal(lhs, top())) {
+                    return top();
+                } else if (equal(lhs, eqZero)) {
+                    return eqZero;
+                } else if (equal(lhs, neZero) || equal(rhs, neZero)) {
+                    return top();
+                } else if (equal(rhs, ltZero)) {
+                    if (equal(lhs, ltZero) || equal(lhs, leZero)) {
+                        return geZero;
+                    } else {
+                        return leZero;
+                    }
+                } else {  // equal(rhs, gtZero)
+                    if (equal(lhs, ltZero) || equal(lhs, leZero)) {
+                        return leZero;
+                    } else {
+                        return geZero;
+                    }
+                }
+            }
+        }
+
+        throw new IllegalStateException();
     }
 
     // ========================================================================
